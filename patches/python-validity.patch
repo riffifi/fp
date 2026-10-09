@@ -1,0 +1,79 @@
+diff --git a/dbus_service/dbus-service b/dbus_service/dbus-service
+index 1c63e8d..dd1dccb 100755
+--- a/dbus_service/dbus-service
++++ b/dbus_service/dbus-service
+@@ -119,8 +119,9 @@ class Device(dbus.service.Object):
+ 
+         def run():
+             try:
+-                # TODO: pass down the user db record id and implement a proper Sensor.verify() method
+-                usrid, subtype, hsh = sensor.identify(update_cb)
++                storage = db.get_user_storage(name="StgWindsor")
++                usrid, subtype, hsh = sensor.identify(
++                    update_cb, user_id=usr.dbid, storage_id=storage.dbid)
+                 if usr.dbid == usrid:
+                     self.VerifyStatus('verify-match', True)
+                 else:
+diff --git a/debian/control b/debian/control
+index 2b09da3..e6dd14f 100644
+--- a/debian/control
++++ b/debian/control
+@@ -4,7 +4,7 @@ Priority: optional
+ Maintainer: uunicorn <viktor.dragomiretskyy@gmail.com>
+ Build-Depends: debhelper (>= 11~), 
+  dh-python, 
+- python3-all, 
++ python3, 
+  python3-setuptools
+ X-Python3-Version: >= 3.6
+ Standards-Version: 4.1.4
+diff --git a/debian/python3-validity.service b/debian/python3-validity.service
+index 93c8c9f..e21fd2b 100644
+--- a/debian/python3-validity.service
++++ b/debian/python3-validity.service
+@@ -4,7 +4,7 @@ After=open-fprintd.service
+ 
+ [Service]
+ Type=simple
+-ExecStart=/usr/lib/python-validity/dbus-service --debug
++ExecStart=/usr/lib/python-validity/dbus-service
+ Restart=no
+ 
+ [Install]
+diff --git a/validitysensor/sensor.py b/validitysensor/sensor.py
+index dd019bb..87eaf64 100644
+--- a/validitysensor/sensor.py
++++ b/validitysensor/sensor.py
+@@ -862,10 +862,10 @@ class Sensor:
+ 
+         return rc
+ 
+-    def match_finger(self) -> typing.Tuple[int, int, bytes]:
++    def match_finger(self, user_id: int = 0, storage_id: int = 0) -> typing.Tuple[int, int, bytes]:
+         try:
+-            stg_id = 0  # match against any storage
+-            usr_id = 0  # match against any user
++            stg_id = storage_id  # zero matches any storage
++            usr_id = user_id  # zero matches any user
+             cmd = pack('<BBBHHHHH', 0x5e, 2, 0xff, stg_id, usr_id, 1, 0, 0)
+             rsp = tls.app(cmd)
+             assert_status(rsp)
+@@ -894,7 +894,8 @@ class Sensor:
+             # cleanup, ignore any errors
+             tls.app(unhexlify('6200000000'))
+ 
+-    def identify(self, update_cb: typing.Callable[[Exception], None]):
++    def identify(self, update_cb: typing.Callable[[Exception], None], user_id: int = 0,
++                 storage_id: int = 0):
+         while True:
+             try:
+                 glow_start_scan()
+@@ -910,7 +911,7 @@ class Sensor:
+                 update_cb(e)
+                 sleep(1)
+ 
+-        return self.match_finger()
++        return self.match_finger(user_id=user_id, storage_id=storage_id)
+ 
+     def get_finger_blobs(self, usrid: int, subtype: int):
+         usr = db.get_user(usrid)

@@ -1,0 +1,82 @@
+diff --git a/debian/control b/debian/control
+index 04dc0fc..a6e4669 100644
+--- a/debian/control
++++ b/debian/control
+@@ -4,7 +4,7 @@ Priority: optional
+ Maintainer: uunicorn <viktor.dragomiretskyy@gmail.com>
+ Build-Depends: debhelper (>= 11~), 
+  dh-python, 
+- python3-all, 
++ python3, 
+  python3-setuptools
+ X-Python3-Version: >= 3.6
+ Standards-Version: 4.1.4
+@@ -15,6 +15,7 @@ Depends: ${python3:Depends},
+  ${misc:Depends},
+  python3-dbus,
+  dbus
++Provides: fprintd (= 1.94.5-4)
+ Breaks: fprintd
+ Conflicts: fprintd
+ Replaces: fprintd
+diff --git a/debian/open-fprintd.install b/debian/open-fprintd.install
+index ea4dca1..428cb71 100644
+--- a/debian/open-fprintd.install
++++ b/debian/open-fprintd.install
+@@ -2,3 +2,5 @@ usr/share/dbus-1
+ usr/lib/python*/*-packages/*.egg-info
+ usr/lib/python*/*-packages/openfprintd/*.py
+ usr/lib/open-fprintd
++
++clients/* usr/bin
+diff --git a/debian/open-fprintd.service b/debian/open-fprintd.service
+index bbee3ef..866cf23 100644
+--- a/debian/open-fprintd.service
++++ b/debian/open-fprintd.service
+@@ -4,4 +4,4 @@ Description=Open FPrint Daemon
+ [Service]
+ Type=dbus
+ BusName=net.reactivated.Fprint
+-ExecStart=/usr/lib/open-fprintd/open-fprintd --debug
++ExecStart=/usr/lib/open-fprintd/open-fprintd
+diff --git a/openfprintd/manager.py b/openfprintd/manager.py
+index bc82ee7..cdd17bf 100644
+--- a/openfprintd/manager.py
++++ b/openfprintd/manager.py
+@@ -1,7 +1,7 @@
+ 
+ import dbus.service
+ import logging
+-from openfprintd.device import Device
++from openfprintd.device import Device, PermissionDenied
+ 
+ INTERFACE_NAME = 'net.reactivated.Fprint.Manager'
+ 
+@@ -47,7 +47,8 @@ class Manager(dbus.service.Object):
+                          connection_keyword='connection',
+                          sender_keyword='sender')
+     def RegisterDevice(self, dev, sender, connection):
+-        # TODO: polkit: make sure we're talking to a root process!
++        if self.bus_name.get_bus().get_unix_user(sender) != 0:
++            raise PermissionDenied()
+         logging.debug('RegisterDevice %s %s' % (sender, repr(dev)))
+ 
+         if dev not in self.devices:
+@@ -62,6 +63,8 @@ class Manager(dbus.service.Object):
+                          connection_keyword='connection',
+                          sender_keyword='sender')
+     def Suspend(self, sender, connection):
++        if self.bus_name.get_bus().get_unix_user(sender) != 0:
++            raise PermissionDenied()
+         logging.debug('Suspend')
+ 
+         for dev in self.devices.values():
+@@ -75,6 +78,8 @@ class Manager(dbus.service.Object):
+                          connection_keyword='connection',
+                          sender_keyword='sender')
+     def Resume(self, sender, connection):
++        if self.bus_name.get_bus().get_unix_user(sender) != 0:
++            raise PermissionDenied()
+         logging.debug('Resume')
+ 
+         for dev in self.devices.values():
